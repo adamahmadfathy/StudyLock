@@ -22,7 +22,6 @@ object UpdateManager {
     private const val CHECK_EVERY_MS = 6 * 60 * 60 * 1000L
 
     var status by mutableStateOf("")
-        private set
 
     private val running = AtomicBoolean(false)
 
@@ -33,8 +32,6 @@ object UpdateManager {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
         return if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
     }
-
-    fun setStatus(message: String) { status = message }
 
     /**
      * Starts a background check. [force] ignores the 6-hour spacing. [silentOnly] is used by the

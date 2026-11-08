@@ -21,8 +21,8 @@ class InstallReceiver : BroadcastReceiver() {
                     context.startActivity(confirm)
                 }
             }
-            PackageInstaller.STATUS_SUCCESS -> UpdateManager.setStatus("Update installed.")
-            else -> UpdateManager.setStatus("Update could not be installed. Open StudyLock and try again.")
+            PackageInstaller.STATUS_SUCCESS -> UpdateManager.status = "Update installed."
+            else -> UpdateManager.status = "Update could not be installed. Open StudyLock and try again."
         }
     }
 }
