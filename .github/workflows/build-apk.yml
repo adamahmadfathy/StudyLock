@@ -10,17 +10,28 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      SIGNING_B64: ${{ secrets.SIGNING_B64 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-      - name: Build debug APK
+      - name: Prepare signing key
+        run: |
+          if [ -n "$SIGNING_B64" ]; then
+            echo "$SIGNING_B64" | base64 -d > "$RUNNER_TEMP/studylock.p12"
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/studylock.p12" >> "$GITHUB_ENV"
+            echo "Using the fixed StudyLock signing key."
+          else
+            echo "::warning::SIGNING_B64 secret is missing. The APK is signed with a temporary key and cannot update an installed copy."
+          fi
+      - name: Build release APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
-          cp app/build/outputs/apk/debug/app-debug.apk StudyLock.apk
+          ./gradlew assembleRelease -Pvc=${{ github.run_number }} --stacktrace
+          cp app/build/outputs/apk/release/app-release.apk StudyLock.apk
       - uses: actions/upload-artifact@v4
         with:
           name: StudyLock-APK
@@ -30,4 +41,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest StudyLock.apk --title "StudyLock APK (latest)" --notes "Debug build of StudyLock. Download StudyLock.apk and install it on your Android phone."
+          gh release create latest StudyLock.apk --title "StudyLock build ${{ github.run_number }}" --notes "Release build of StudyLock. Download StudyLock.apk and install it on your Android phone."

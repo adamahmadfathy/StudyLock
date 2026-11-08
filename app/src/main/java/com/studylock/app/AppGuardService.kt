@@ -21,10 +21,20 @@ class AppGuardService : AccessibilityService() {
         }
     }
 
+    // Looks for a new StudyLock release now and then (it only acts if one exists).
+    private val updateCheck = object : Runnable {
+        override fun run() {
+            UpdateManager.check(applicationContext, force = false, silentOnly = true)
+            handler.postDelayed(this, 60 * 60 * 1000L)
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         handler.removeCallbacks(poll)
+        handler.removeCallbacks(updateCheck)
         handler.post(poll)
+        handler.postDelayed(updateCheck, 30_000L)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -66,11 +76,13 @@ class AppGuardService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         handler.removeCallbacks(poll)
+        handler.removeCallbacks(updateCheck)
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         handler.removeCallbacks(poll)
+        handler.removeCallbacks(updateCheck)
         super.onDestroy()
     }
 }

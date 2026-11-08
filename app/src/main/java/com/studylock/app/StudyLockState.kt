@@ -50,12 +50,17 @@ object StudyLockState {
         val effectiveNow = maxOf(now, last)
         var phase = runCatching { Phase.valueOf(p.getString(KEY_PHASE, Phase.LOCKED.name)!!) }.getOrDefault(Phase.LOCKED)
         var end = p.getLong(KEY_END, effectiveNow + lock * 60_000L)
+        val startPhase = phase
+        val startEnd = end
         var guard = 0
         while (effectiveNow >= end && guard++ < 100) {
             phase = if (phase == Phase.LOCKED) Phase.ALLOWED else Phase.LOCKED
             end += (if (phase == Phase.LOCKED) lock else use) * 60_000L
         }
-        p.edit().putString(KEY_PHASE, phase.name).putLong(KEY_END, end).putLong(KEY_LAST_WALL, effectiveNow).apply()
+        // Write only when something changed (or every 30 s for the clock guard), not on every call.
+        if (phase != startPhase || end != startEnd || effectiveNow - last > 30_000L) {
+            p.edit().putString(KEY_PHASE, phase.name).putLong(KEY_END, end).putLong(KEY_LAST_WALL, effectiveNow).apply()
+        }
         return Snapshot(phase, (end - effectiveNow).coerceAtLeast(0), lock, use)
     }
 
