@@ -1,0 +1,3 @@
+<resources>
+    <string name="accessibility_description">Detects when a selected app is opened so StudyLock can show its lock screen.</string>
+</resources>
