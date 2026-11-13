@@ -91,9 +91,9 @@ class MainActivity : ComponentActivity() {
 
     // ---- Helpers ----
     /** Validates the three numbers; returns an error message, or null when they are fine. */
-    private fun validate(l: Int?, u: Int?, c: Int?): String? =
-        if (l == null || l < 30 || u == null || u !in 1..30 || c == null || c !in 20..300)
-            "Lock ≥ 30, usage 1–30, challenge 20–300." else null
+    private fun validate(l: Int?, c: Int?): String? =
+        if (l == null || l < 30 || c == null || c !in 20..300)
+            "Lock must be at least 30 minutes and the challenge 20–300 characters." else null
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 
@@ -107,14 +107,25 @@ class MainActivity : ComponentActivity() {
 
     // ---- UI ----
     @Composable
-    private fun StatusCard(enabled: Boolean, locked: Boolean, remaining: MutableLongState, protectionOn: Boolean) {
+    private fun StatusCard(enabled: Boolean, phase: StudyLockState.Phase, remaining: MutableLongState, protectionOn: Boolean) {
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1B27))) {
             Column(Modifier.padding(16.dp)) {
+                val locked = enabled && phase == StudyLockState.Phase.LOCKED
                 Text(
-                    if (!enabled) "NOT STARTED" else if (locked) "LOCKED" else "USAGE WINDOW",
+                    if (!enabled) "NOT STARTED" else when (phase) {
+                        StudyLockState.Phase.LOCKED -> "LOCKED"
+                        StudyLockState.Phase.ASK -> "WAITING FOR YOUR ANSWER"
+                        StudyLockState.Phase.OPEN -> "APPS OPEN"
+                    },
                     color = Color(0xFFB9A6FF)
                 )
-                Text(if (enabled) formatTime(remaining.longValue) else "Ready to configure", color = Color.White, fontSize = 28.sp)
+                Text(
+                    if (!enabled) "Ready to configure"
+                    else if (locked) formatTime(remaining.longValue)
+                    else if (phase == StudyLockState.Phase.ASK) "Open a protected app to answer"
+                    else "Open until you leave them",
+                    color = Color.White, fontSize = if (locked) 28.sp else 18.sp
+                )
                 Spacer(Modifier.height(6.dp))
                 Text(
                     if (protectionOn) "App protection is on." else "App protection is off. Turn it on in Accessibility settings.",
@@ -139,7 +150,6 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun MainScreen() {
         var lock by remember { mutableStateOf(StudyLockState.lockMinutes(this@MainActivity).toString()) }
-        var use by remember { mutableStateOf(StudyLockState.useMinutes(this@MainActivity).toString()) }
         var challenge by remember { mutableStateOf(StudyLockState.challengeLength(this@MainActivity).toString()) }
         var selected by remember { mutableStateOf(StudyLockState.selected(this@MainActivity)) }
 
@@ -149,6 +159,7 @@ class MainActivity : ComponentActivity() {
         }
 
         var enabled by remember { mutableStateOf(false) }
+        var phase by remember { mutableStateOf(StudyLockState.Phase.OPEN) }
         var locked by remember { mutableStateOf(false) }
         var protectionOn by remember { mutableStateOf(false) }
         var installOk by remember { mutableStateOf(true) }
@@ -160,6 +171,7 @@ class MainActivity : ComponentActivity() {
         fun refresh() {
             val snap = StudyLockState.snapshot(this@MainActivity)
             enabled = StudyLockState.isEnabled(this@MainActivity)
+            phase = snap.phase
             locked = enabled && snap.phase == StudyLockState.Phase.LOCKED
             remaining.longValue = snap.remainingMs
             protectionOn = isProtectionOn()
@@ -170,10 +182,10 @@ class MainActivity : ComponentActivity() {
 
         // Saves the typed values; returns false (after showing why) when they are not valid.
         fun save(): Boolean {
-            val l = lock.toIntOrNull(); val u = use.toIntOrNull(); val c = challenge.toIntOrNull()
-            val error = validate(l, u, c)
+            val l = lock.toIntOrNull(); val c = challenge.toIntOrNull()
+            val error = validate(l, c)
             if (error != null) { toast(error); return false }
-            StudyLockState.saveSettings(this@MainActivity, l!!, u!!, c!!, selected)
+            StudyLockState.saveSettings(this@MainActivity, l!!, StudyLockState.useMinutes(this@MainActivity), c!!, selected)
             return true
         }
 
@@ -188,7 +200,7 @@ class MainActivity : ComponentActivity() {
                         Text("STUDYLOCK", color = Color.White, fontSize = 27.sp)
                         Text("Make distraction harder.", color = Color(0xFFB9B9C8))
                     }
-                    item { StatusCard(enabled, locked, remaining, protectionOn) }
+                    item { StatusCard(enabled, phase, remaining, protectionOn) }
                     if (!installOk || !batteryOk || !protectionOn) item {
                         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1B27))) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -213,15 +225,6 @@ class MainActivity : ComponentActivity() {
                             onValueChange = { lock = it.filter(Char::isDigit).take(5) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             label = { Text("Lock duration (minutes) — minimum 30") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    item {
-                        OutlinedTextField(
-                            value = use, enabled = !locked,
-                            onValueChange = { use = it.filter(Char::isDigit).take(2) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            label = { Text("Allowed usage (minutes) — maximum 30") },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -271,7 +274,7 @@ class MainActivity : ComponentActivity() {
                     item {
                         OutlinedButton(
                             onClick = {
-                                if (locked) toast("You can stop the cycle during a usage window. To get one now, use \"Deactivate lock early\" on the lock screen.")
+                                if (locked) toast("You can stop the cycle once the lock has ended. To end it now, use \"Deactivate lock early\" on the lock screen.")
                                 else { StudyLockState.stopCycle(this@MainActivity); refresh() }
                             },
                             modifier = Modifier.fillMaxWidth()
@@ -279,7 +282,7 @@ class MainActivity : ComponentActivity() {
                     }
                     item {
                         Text(
-                            "Cycle: locked → automatically allowed → locked again. You can uninstall StudyLock at any time.",
+                            "Cycle: locked → when the lock ends, StudyLock asks \"Have you finished studying?\". Yes opens your apps until you leave them. A break locks them again. You can uninstall StudyLock at any time.",
                             color = Color(0xFFB9B9C8), fontSize = 12.sp
                         )
                     }

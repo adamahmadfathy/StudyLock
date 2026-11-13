@@ -4,8 +4,7 @@ This is a native Android Studio project (Kotlin + Jetpack Compose), not an APK. 
 
 ## Agreed timer rules
 - Lock duration: minimum 30 minutes (30 is allowed).
-- Allowed usage duration: maximum 30 minutes (30 is allowed; minimum is 1 minute).
-- Automatic repeating cycle: locked → allowed → locked.
+- Cycle: locked → when the lock ends, StudyLock asks "Have you finished studying?". Yes opens the chosen apps until you leave them; "I'm having a break" starts the lock again.
 - Default early-deactivation challenge length: 100 characters.
 - Any incorrect typed character immediately regenerates the challenge and clears the input.
 - The user chooses the apps to protect and can uninstall StudyLock normally.

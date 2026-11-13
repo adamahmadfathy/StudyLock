@@ -1,7 +1,10 @@
 package com.studylock.app
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -12,7 +15,7 @@ class AppGuardService : AccessibilityService() {
     private var currentPackage: String? = null
     private var lastBlockedPackage: String? = null
 
-    // Re-checks once per second so a lock period that starts while a protected app is
+    // Re-checks once per second so a lock that ends (or starts) while a protected app is
     // already open still takes effect, without waiting for another window event.
     private val poll = object : Runnable {
         override fun run() {
@@ -29,12 +32,25 @@ class AppGuardService : AccessibilityService() {
         }
     }
 
+    // Turning the screen off ends an "open" session, so the next open asks the question again.
+    private val screenOff = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            StudyLockState.endSession(applicationContext)
+            lastBlockedPackage = null
+        }
+    }
+    private var screenReceiverRegistered = false
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         handler.removeCallbacks(poll)
         handler.removeCallbacks(updateCheck)
         handler.post(poll)
         handler.postDelayed(updateCheck, 30_000L)
+        if (!screenReceiverRegistered) {
+            registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
+            screenReceiverRegistered = true
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -44,7 +60,11 @@ class AppGuardService : AccessibilityService() {
         if (pkg == applicationContext.packageName) return
         // The keyboard and system panels sit on top of apps; they are not apps the user switched to.
         if (pkg == "com.android.systemui" || pkg == keyboardPackage()) return
-        if (pkg != currentPackage) lastBlockedPackage = null
+        if (pkg != currentPackage) {
+            lastBlockedPackage = null
+            // Leaving the protected apps ends an "open" session.
+            if (pkg !in StudyLockState.selected(this)) StudyLockState.endSession(this)
+        }
         currentPackage = pkg
         evaluate(pkg)
     }
@@ -55,17 +75,18 @@ class AppGuardService : AccessibilityService() {
             return
         }
         val state = StudyLockState.snapshot(this)
-        if (state.phase == StudyLockState.Phase.LOCKED) {
-            if (lastBlockedPackage != pkg) {
-                lastBlockedPackage = pkg
-                startActivity(
-                    Intent(this, BlockActivity::class.java).addFlags(
-                        Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_HISTORY
-                    )
-                )
-            }
-        } else {
+        if (state.phase == StudyLockState.Phase.OPEN) {
             lastBlockedPackage = null
+            return
+        }
+        // LOCKED shows the lock screen; ASK shows "Have you finished studying?". Both use BlockActivity.
+        if (lastBlockedPackage != pkg) {
+            lastBlockedPackage = pkg
+            startActivity(
+                Intent(this, BlockActivity::class.java).addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_HISTORY
+                )
+            )
         }
     }
 
@@ -74,15 +95,22 @@ class AppGuardService : AccessibilityService() {
 
     override fun onInterrupt() { lastBlockedPackage = null }
 
-    override fun onUnbind(intent: Intent?): Boolean {
+    private fun stopWork() {
         handler.removeCallbacks(poll)
         handler.removeCallbacks(updateCheck)
+        if (screenReceiverRegistered) {
+            try { unregisterReceiver(screenOff) } catch (e: Exception) { /* already gone */ }
+            screenReceiverRegistered = false
+        }
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        stopWork()
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
-        handler.removeCallbacks(poll)
-        handler.removeCallbacks(updateCheck)
+        stopWork()
         super.onDestroy()
     }
 }
