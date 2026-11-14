@@ -43,7 +43,7 @@ class BlockActivity : ComponentActivity() {
         LaunchedEffect(Unit) { while (true) { delay(1000); tick++ } }
         val snap = remember(tick) { StudyLockState.snapshot(this@BlockActivity) }
         // The apps are open (answered Yes, or the cycle was stopped): nothing left to show.
-        LaunchedEffect(snap.phase) { if (snap.phase == StudyLockState.Phase.OPEN) onUnlocked() }
+        LaunchedEffect(snap.phase) { if (snap.phase == StudyLockState.Phase.OPEN || snap.phase == StudyLockState.Phase.BREAK) onUnlocked() }
         MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFFB9A6FF), background = Color(0xFF10111A), surface = Color(0xFF1A1B27))) {
             Column(
                 Modifier.fillMaxSize().background(Color(0xFF10111A)).verticalScroll(rememberScrollState()).imePadding().padding(24.dp),
@@ -58,11 +58,11 @@ class BlockActivity : ComponentActivity() {
                             onUnlocked()
                         },
                         onBreak = {
-                            StudyLockState.startCycle(this@BlockActivity)
-                            tick++
+                            StudyLockState.startBreak(this@BlockActivity)
+                            onUnlocked()
                         }
                     )
-                    StudyLockState.Phase.OPEN -> Spacer(Modifier.height(1.dp))
+                    StudyLockState.Phase.OPEN, StudyLockState.Phase.BREAK -> Spacer(Modifier.height(1.dp))
                 }
             }
         }
@@ -81,7 +81,7 @@ class BlockActivity : ComponentActivity() {
         OutlinedButton(onClick = onBreak, modifier = Modifier.fillMaxWidth()) { Text("I'm having a break") }
         Spacer(Modifier.height(16.dp))
         Text(
-            "Yes opens your apps for your allowed time. A break starts the lock again.",
+            "Yes opens your apps until you leave them. A break gives you ${StudyLockState.useMinutes(this@BlockActivity)} minutes, then the lock starts again.",
             color = Color(0xFFB9B9C8), fontSize = 12.sp
         )
     }
@@ -117,7 +117,7 @@ class BlockActivity : ComponentActivity() {
                     if (value.length <= challenge.length && challenge.startsWith(value)) {
                         entry = value
                         if (entry == challenge) {
-                            StudyLockState.startOpen(this@BlockActivity)
+                            StudyLockState.startBreak(this@BlockActivity)
                             onUnlocked()
                         }
                     } else {

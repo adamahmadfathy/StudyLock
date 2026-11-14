@@ -116,14 +116,16 @@ class MainActivity : ComponentActivity() {
                         StudyLockState.Phase.LOCKED -> "LOCKED"
                         StudyLockState.Phase.ASK -> "WAITING FOR YOUR ANSWER"
                         StudyLockState.Phase.OPEN -> "APPS OPEN"
+                        StudyLockState.Phase.BREAK -> "BREAK, APPS OPEN"
                     },
                     color = Color(0xFFB9A6FF)
                 )
-                val timed = enabled && phase != StudyLockState.Phase.ASK
+                val timed = enabled && (phase == StudyLockState.Phase.LOCKED || phase == StudyLockState.Phase.BREAK)
                 Text(
                     if (!enabled) "Ready to configure"
                     else if (timed) formatTime(remaining.longValue)
-                    else "Open a protected app to answer",
+                    else if (phase == StudyLockState.Phase.ASK) "Open a protected app to answer"
+                    else "Open until you leave them",
                     color = Color.White, fontSize = if (timed) 28.sp else 18.sp
                 )
                 Spacer(Modifier.height(6.dp))
@@ -292,7 +294,7 @@ class MainActivity : ComponentActivity() {
                     }
                     item {
                         Text(
-                            "Cycle: locked → when the lock ends, StudyLock asks \"Have you finished studying?\". Yes opens your apps for your allowed minutes, or until you leave them. A break locks them again. You can uninstall StudyLock at any time.",
+                            "Cycle: locked → when the lock ends, StudyLock asks \"Have you finished studying?\". Yes opens your apps until you leave them. A break gives you your allowed minutes, then locks them again. You can uninstall StudyLock at any time.",
                             color = Color(0xFFB9B9C8), fontSize = 12.sp
                         )
                     }

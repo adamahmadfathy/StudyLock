@@ -75,7 +75,7 @@ class AppGuardService : AccessibilityService() {
             return
         }
         val state = StudyLockState.snapshot(this)
-        if (state.phase == StudyLockState.Phase.OPEN) {
+        if (state.phase == StudyLockState.Phase.OPEN || state.phase == StudyLockState.Phase.BREAK) {
             lastBlockedPackage = null
             return
         }
