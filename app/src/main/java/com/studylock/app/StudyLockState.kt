@@ -7,7 +7,7 @@ import java.security.SecureRandom
  * The cycle:
  *  LOCKED  - protected apps are blocked until the lock minutes run out.
  *  ASK     - the lock has ended; opening a protected app asks "Have you finished studying?".
- *  OPEN    - the user answered Yes; protected apps work until the user leaves them.
+ *  OPEN    - the user answered Yes; protected apps work for the allowed-usage minutes, or until the user leaves them.
  */
 object StudyLockState {
     private const val PREFS = "studylock_settings"
@@ -58,21 +58,21 @@ object StudyLockState {
         var end = p.getLong(KEY_END, effectiveNow + lockMinutes(context) * 60_000L)
         val startPhase = phase
         val startEnd = end
-        // When the lock runs out, wait for the user's answer instead of unlocking by itself.
-        if (phase == Phase.LOCKED && effectiveNow >= end) { phase = Phase.ASK; end = 0L }
+        // When the lock or the open window runs out, wait for the user's answer instead of changing by itself.
+        if ((phase == Phase.LOCKED || phase == Phase.OPEN) && effectiveNow >= end) { phase = Phase.ASK; end = 0L }
         // Write only when something changed (or every 30 s for the clock guard), not on every call.
         if (phase != startPhase || end != startEnd || effectiveNow - last > 30_000L) {
             p.edit().putString(KEY_PHASE, phase.name).putLong(KEY_END, end).putLong(KEY_LAST_WALL, effectiveNow).apply()
         }
-        val remaining = if (phase == Phase.LOCKED) (end - effectiveNow).coerceAtLeast(0) else 0L
+        val remaining = if (phase == Phase.ASK) 0L else (end - effectiveNow).coerceAtLeast(0)
         return Snapshot(phase, remaining, true)
     }
 
-    /** "Yes, I've finished studying" (or the early-deactivation challenge): protected apps open up. */
+    /** "Yes, I've finished studying" (or the early-deactivation challenge): protected apps open for the allowed-usage minutes. */
     fun startOpen(context: Context) {
         val now = System.currentTimeMillis()
         prefs(context).edit().putBoolean(KEY_ENABLED, true).putString(KEY_PHASE, Phase.OPEN.name)
-            .putLong(KEY_END, 0L).putLong(KEY_LAST_WALL, now).apply()
+            .putLong(KEY_END, now + useMinutes(context) * 60_000L).putLong(KEY_LAST_WALL, now).apply()
     }
 
     /** The user left the protected apps (or the screen turned off): the next open asks again. */

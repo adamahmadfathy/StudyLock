@@ -81,7 +81,7 @@ class BlockActivity : ComponentActivity() {
         OutlinedButton(onClick = onBreak, modifier = Modifier.fillMaxWidth()) { Text("I'm having a break") }
         Spacer(Modifier.height(16.dp))
         Text(
-            "Yes opens your apps until you leave them. A break starts the lock again.",
+            "Yes opens your apps for your allowed time. A break starts the lock again.",
             color = Color(0xFFB9B9C8), fontSize = 12.sp
         )
     }

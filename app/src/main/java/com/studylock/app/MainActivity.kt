@@ -91,9 +91,9 @@ class MainActivity : ComponentActivity() {
 
     // ---- Helpers ----
     /** Validates the three numbers; returns an error message, or null when they are fine. */
-    private fun validate(l: Int?, c: Int?): String? =
-        if (l == null || l < 30 || c == null || c !in 20..300)
-            "Lock must be at least 30 minutes and the challenge 20–300 characters." else null
+    private fun validate(l: Int?, u: Int?, c: Int?): String? =
+        if (l == null || l < 30 || u == null || u !in 1..30 || c == null || c !in 20..300)
+            "Lock ≥ 30, usage 1–30, challenge 20–300." else null
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 
@@ -119,12 +119,12 @@ class MainActivity : ComponentActivity() {
                     },
                     color = Color(0xFFB9A6FF)
                 )
+                val timed = enabled && phase != StudyLockState.Phase.ASK
                 Text(
                     if (!enabled) "Ready to configure"
-                    else if (locked) formatTime(remaining.longValue)
-                    else if (phase == StudyLockState.Phase.ASK) "Open a protected app to answer"
-                    else "Open until you leave them",
-                    color = Color.White, fontSize = if (locked) 28.sp else 18.sp
+                    else if (timed) formatTime(remaining.longValue)
+                    else "Open a protected app to answer",
+                    color = Color.White, fontSize = if (timed) 28.sp else 18.sp
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -150,6 +150,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun MainScreen() {
         var lock by remember { mutableStateOf(StudyLockState.lockMinutes(this@MainActivity).toString()) }
+        var use by remember { mutableStateOf(StudyLockState.useMinutes(this@MainActivity).toString()) }
         var challenge by remember { mutableStateOf(StudyLockState.challengeLength(this@MainActivity).toString()) }
         var selected by remember { mutableStateOf(StudyLockState.selected(this@MainActivity)) }
 
@@ -182,10 +183,10 @@ class MainActivity : ComponentActivity() {
 
         // Saves the typed values; returns false (after showing why) when they are not valid.
         fun save(): Boolean {
-            val l = lock.toIntOrNull(); val c = challenge.toIntOrNull()
-            val error = validate(l, c)
+            val l = lock.toIntOrNull(); val u = use.toIntOrNull(); val c = challenge.toIntOrNull()
+            val error = validate(l, u, c)
             if (error != null) { toast(error); return false }
-            StudyLockState.saveSettings(this@MainActivity, l!!, StudyLockState.useMinutes(this@MainActivity), c!!, selected)
+            StudyLockState.saveSettings(this@MainActivity, l!!, u!!, c!!, selected)
             return true
         }
 
@@ -225,6 +226,15 @@ class MainActivity : ComponentActivity() {
                             onValueChange = { lock = it.filter(Char::isDigit).take(5) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             label = { Text("Lock duration (minutes) — minimum 30") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = use, enabled = !locked,
+                            onValueChange = { use = it.filter(Char::isDigit).take(2) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            label = { Text("Allowed usage (minutes) — maximum 30") },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -282,7 +292,7 @@ class MainActivity : ComponentActivity() {
                     }
                     item {
                         Text(
-                            "Cycle: locked → when the lock ends, StudyLock asks \"Have you finished studying?\". Yes opens your apps until you leave them. A break locks them again. You can uninstall StudyLock at any time.",
+                            "Cycle: locked → when the lock ends, StudyLock asks \"Have you finished studying?\". Yes opens your apps for your allowed minutes, or until you leave them. A break locks them again. You can uninstall StudyLock at any time.",
                             color = Color(0xFFB9B9C8), fontSize = 12.sp
                         )
                     }
